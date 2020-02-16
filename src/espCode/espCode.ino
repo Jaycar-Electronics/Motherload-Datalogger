@@ -6,7 +6,7 @@
 
 const char *wifi_ssid = "WiFi network";
 const char *wifi_pass = "p4ssw0rd";
-const char *invoke_url = "http://someURLToYour.cloudfunctions.net/functionNameProbablyLogData";
+const char *invoke_url = "https://someURLToYour.cloudfunctions.net/functionNameProbablyLogData";
 
 //-- generally, anything below this line doesn't have to be touched --
 //-- but feel free to have a poke. --
@@ -53,8 +53,11 @@ void loop()
 
   serializeJson(doc, jsonBuffer);
 
+  BearSSL::WiFiClientSecure client;
+  client.setInsecure();
+
   HTTPClient http;
-  http.begin(invoke_url);
+  http.begin(client, invoke_url);
   http.addHeader("Content-Type", "application/json");
   int httpCode = http.POST(jsonBuffer);
   http.end();

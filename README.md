@@ -17,6 +17,7 @@ This project is designed to be open ended, so you can set it to interact with th
     - [Setting up the Google Cloud Platform](#Setting-up-the-Google-Cloud-Platform)
       - [Building a Cloud function](#Building-a-Cloud-function)
       - [Bind Service worker to Google Sheets](#Bind-Service-worker-to-Google-Sheets)
+      - [Copy the Trigger URL](#Copy-the-Trigger-URL)
     - [Program the ESP8266](#Program-the-ESP8266)
       - [How to program the device (for first timers)](#How-to-program-the-device-for-first-timers)
       - [Testing ESP8266 and Cloud Function](#Testing-ESP8266-and-Cloud-Function)
@@ -80,9 +81,9 @@ function main(urlData) {
       api.spreadsheets.values.append(
         //add it to the spreadsheet
         {
-          spreadsheetId: " ... ",
-          values: urlData
-        }
+          spreadsheetId: ' ... ',
+          values: urlData,
+        },
       );
     })
     .then(message => {
@@ -127,6 +128,8 @@ For this tutorial, we will call our project "datalogger" but you can call it wha
 
 #### Building a Cloud function
 
+Next up we're going to make a cloud function to add data to our spreadsheet, which is triggered by a url.
+
 Find "Cloud Functions" in the side menu, you can pin it to the top of the list to make it easier to find next time.
 
 ![cloud functions side menu](images/cloudFunctions.png)
@@ -135,30 +138,31 @@ If you don't have a function it should present you with one button saying "creat
 
 ![Cloud function page](images/newFunction.png)
 
-We've split the image so that you can see all what's going on:
+We've split the image and put it side by side so that you can see all what's going on:
 
 - Name the function something descriptive, without spaces. We've gone with `logData` as that is what the function will do.
 - Memory Allocated: This function really doesn't need much, so go with 128MB. if you're expecting to send more data, bump this up.
 - Trigger: we want to trigger with a HTTP request, which the URL is presented below (save this to put in the ESP later).
 - Source code: you can just use the inline editor
 - Runtime: We are using NodeJS for the code samples below, but you can also write python or `go` code if you want.
+- _Function to execute_: In this function we called it "main" as denoted by the "exports" in code. change this to be `main`
 
-Copy and paste the below code for **index.js**
+Then copy and paste the below code for **index.js**
 
 ```javascript
-const { google } = require("googleapis");
+const { google } = require('googleapis');
 
 function append(api, data) {
   return new Promise((resolve, reject) => {
     api.spreadsheets.values.append(
       {
         spreadsheetId: process.env.SHEET,
-        range: "A1:Z1",
-        insertDataOption: "INSERT_ROWS",
-        valueInputOption: "USER_ENTERED",
+        range: 'A1:Z1',
+        insertDataOption: 'INSERT_ROWS',
+        valueInputOption: 'USER_ENTERED',
         resource: {
-          values: [data]
-        }
+          values: [data],
+        },
       },
       function(err, response) {
         if (err) {
@@ -167,19 +171,19 @@ function append(api, data) {
         }
         resolve(response);
         return;
-      }
+      },
     );
   });
 }
 exports.main = (req, res) => {
   google.auth
     .getClient({
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     })
     .then(auth => {
-      const api = google.sheets({ version: "v4", auth });
+      const api = google.sheets({ version: 'v4', auth });
 
-      append(api, req.query.data || req.body.data || ["no", "data", "sent"])
+      append(api, req.query.data || req.body.data || ['no', 'data', 'sent'])
         .then(e => {
           res.status(200).send(JSON.stringify(e, null, 2));
         })
@@ -190,7 +194,7 @@ exports.main = (req, res) => {
 };
 ```
 
-Then copy and paste the below code for **package.json**
+And copy and paste the below code for **package.json**
 
 ```json
 {
@@ -202,43 +206,55 @@ Then copy and paste the below code for **package.json**
 }
 ```
 
-- _Function to execute_: In this function we called it "main" as denoted by the "exports" in code. change this to be `main`
+**Next up is important**: expand the "Advanced options" or "environmental variables, networking, timeouts and more" line. This allows you to set up different variables, where we will put our sheet ID.
 
-Next up is important: expand the "environmental variables, networking, timeouts and more" line, so you get more advanced properties, and add an variable named "SHEET" containing your google Sheets ID, similar to below:
+You should see "Environmental Variables" - add an variable named "SHEET" containing your google Sheets ID, similar to below:
 
 ![environmental var](images/env.png)
 
+This is the sheet ID that you have copied from google sheets. Open up the google sheets in a new tab and copy the sheet id, like from below (underlined in red).
+
+![Google sheets](images/newSheet.png)
+
 This is so that the function knows what sheet to access and add data to _(This is the sheet you will "share" with the service worker later)_.
 
-Then press **Create** give it a a little while and it should deploy successfully. You should come to a screen like what is presented here: _(Note: we've cropped our image to make it fit on this page.)_
+Then press **Create** back on the cloud function, and give it a a little while to deploy successfully. You should come to a screen like what is presented here: _(Note: we've cropped our image to make it fit on this page.)_
 
 ![function properties](images/functionProperties.png)
 
 Two things to note here:
 
-- Service worker: This is the "google account" that acts on behalf of the function, we'll use this below so copy it.
+- Service worker: This is the "google account" that acts on behalf of the function, we'll use this soon.
 - Trigger tab: this shows you the URL used to trigger the function.
+
+Copy the service account address, and head back to google sheets.
 
 #### Bind Service worker to Google Sheets
 
-In a new tab, head back to your google sheet that you want to add data to, and click the `Share` button, in the top right.
+Make sure you're on the same google sheet that you want to log data to, and click the `Share` button in the top right.
 
-copy and paste the `service account` email address to the share link, and make sure that the permission is set to "Can Edit".
+Paste the `service account` email address to the share link, and make sure that the permission is set to "Can Edit".
 
 ![add service account to function](images/addService.png)
 
-This is done on Google Sheets so when the function tries to edit, the sheets will allow it to come from your service worker. You can go back to your function properties and try to open the trigger url if you want; when you access it, you should get a row of data on your sheet that says `"No", "Data", "Sent"`.
+What we're doing here, is allowing the "function's account" or the function to act on behalf of the service account, to add data (edit) the google sheet.. It is sort of like "sharing" your google sheet with a friend, however this friend is just a robot that operates on the google cloud functions.
+
+#### Copy the Trigger URL
+
+Head back to your Google Cloud Function, and click on the "Trigger" tab. You can see a URL which is the http end point to trigger this function. Try opening it in a new tab, you will find that it will contain a lot of random unorganised data; and your google sheets will be updated with "No Data Sent"
+
+Copy this Trigger URL, we will place it in the ESP code shortly.
 
 ### Program the ESP8266
 
 There's two parts of code that you need to change for the esp code, found in `src/espCode/espCode.ino`:
 
 - WiFi connection details
-- Target URL, which is found from the _Function Properties_ as above, but with the `https://` replaced with `http://`.
+- Target URL, which is found from the _Function Properties_ as above.
 
 ![making changes](images/url.png)
 
-We change it to `http` as dealing with SSL is a bit of a pain to do on the ESP8266. If you are up for a challenge, feel free to submit a pull request enabling `https://`, We'd love to see it!
+_Note:_ We are using an insecure version of https, as in: we ask for https but we don't verify what we're connecting with. This is insecure but easier to deal with.
 
 Change the code to reflect your details and upload onto the ESP portion of the [XC4411](https://jaycar.com.au/p/XC4411).
 
@@ -247,21 +263,24 @@ If you've never used any ESP8266 device before, read the below section for a qui
 #### How to program the device (for first timers)
 
 If this is your first ESP8266 project ( products include [XC3802](https://jaycar.com.au/p/XC3802) and [XC4411](https://jaycar.com.au/p/XC4411), among others) then you need to set up Arduino to work with ESP8266. Start by getting the manual of the [XC3802](https://jaycar.com.au/p/XC3802) and install the board through the Boards manager.
-Once they are installed, change the Board type to `Generic ESP8266` and change the dip-switches on the [XC4411](https://jaycar.com.au/p/XC4411) so that 5,6, and 7 are `ON` with all others off. When uploading, you might get to a point where it will output a string like `....______......____` - Press the reset button on the board to reboot it and program correctly.
 
-When programming the arduino portion, change the dip-switches so that 3 and 4 are `ON` with 1,2,5,6, and 7 are `OFF`. Once both halves are programmed, you connect the two by turning all switches off and setting 1 and 2 to `ON`.
+Once they are installed, to program the [XC4411](https://jaycar.com.au/p/XC4411) ESP, change the Board type to `Generic ESP8266` and change the dip-switches on the board so that 5,6, and 7 are `ON` with all others off. When uploading, you might get to a point where it will output a string like `....______......____` - Press the reset button on the board to reboot it and program correctly.
+
+When programming the arduino portion, change the dip-switches so that 3 and 4 are `ON` with 1,2,5,6, and 7 are `OFF`. Once both halves are programmed, you connect the two by turning all switches off and setting 1 and 2 to `ON`. For more information or a smaller trial program to try, use the software and manual on the [XC4411](https://jaycar.com.au/p/XC4411) product page.
 
 #### Testing ESP8266 and Cloud Function
 
-Once the ESPCode is uploaded, you can turn dip-switch 7 `OFF` and open up the _Serial Monitor_. Set to the correct baud speed (default: 115200) and reset the device. You should see that it has connected to the WiFi network, and if you type in something such as:
+Once the ESPCode is uploaded, you can turn dip-switch 7 `OFF` and open up the _**Serial Monitor**_. Set to the correct baud speed (default: 115200) and reset the device. You should see that it has connected to the WiFi network, and if you type in something such as:
 
 ```json
 [1, 2, "This is a string", 4]
 ```
 
+Note that you are typing this into the serial monitor.
+
 You will find this information has been uploaded onto your google spreadsheet. This means we're half-way there, and what's more is that it's a very simple process which might be starting to make sense to you; The ESP gets the serial data, and sends it to the URL; The Google Cloud function we made before then takes the data and adds it to your google sheet, as the service worker user, just as if someone else has added that data.
 
-_Note, this is JSON data, so it must be properly formatted. In our code, we use the brilliant [ArduinoJSON](https://arduinojson.org/) library to parse everything correctly._
+_Note, this is JSON data, so it must be properly formatted. In our code, we use the brilliant [ArduinoJSON](https://arduinojson.org/) library to parse everything correctly, but in the serial monitor you must format it yourself._
 
 ### Assemble the shield and set up RTC
 
@@ -373,6 +392,8 @@ Have a look at some of the other apis and find a way to connect the API to new g
 
 The following links are not an endorsement nor have any guarantee of quality in terms of suitability for this project, but we hope they are useful for you in your maker journey.
 
+- Using the XC4411
+  - <https://www.jaycar.com.au/medias/sys_master/images/9356641828894/XC4411-manualMain.pdf>
 - Writing Cloud Functions
   - <https://cloud.google.com/functions/docs/writing/http>
 - Arduino Memory allocation (Good read!)
