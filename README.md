@@ -126,6 +126,19 @@ Each function and service on GCP must be tied to a _project_, this keeps all the
 
 For this tutorial, we will call our project "datalogger" but you can call it whatever. It might take a short while for the project to be created when you first make it, so go make a cup of tea and some toast while you wait. It should appear near the top of the page, next to "Google Cloud Platform" once it has loaded.
 
+#### First Step: Enabling the API
+
+In order to use the google sheets API (which we will be doing soon) you must first `enable` the api.
+
+You can find that by clicking on the following link:
+
+- <https://console.cloud.google.com/apis/library/sheets.googleapis.com>
+
+Then:
+
+1. Make sure your datalogger project is in the top dropdown.
+2. Click "enable"
+
 #### Building a Cloud function
 
 Next up we're going to make a cloud function to add data to our spreadsheet, which is triggered by a url.
